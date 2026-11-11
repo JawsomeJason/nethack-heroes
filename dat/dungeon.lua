@@ -1,6 +1,7 @@
 -- $NHDT-Header: NetHack 5.0 dungeon.lua 2026/06/20_22:35:38 NetHack-5.0:1.13 $
 -- Copyright (c) 1990-1995 by M. Stephenson
 -- NetHack may be freely redistributed.  See license for details.
+-- Modified for the heroes fork, 2026-11-11: headquarters level and first mission dungeon.
 --
 -- The dungeon description file.
 dungeon = {
@@ -50,6 +51,10 @@ dungeon = {
          }
       },
       levels = {
+         {
+            name = "hq",
+            base = 1
+         },
          {
             name = "rogue",
             bonetag = "R",
@@ -314,6 +319,16 @@ dungeon = {
             base = 6
          },
       }
+   },
+   {
+      name = "Harbor District",
+      base = 3,
+      flags = { "mazelike", "unconnected" },
+      lvlfill = "cityfill",
+      levels = {
+         { name = "cityfill", base = 1 },
+         { name = "foundry", base = -1 },
+      },
    },
    {
       name = "The Tutorial",
