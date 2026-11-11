@@ -2,8 +2,10 @@
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #include "hack.h"
+#include "theme.h"
 /*
  *      These routines provide basic data for any type of monster.
  */
@@ -1069,6 +1071,12 @@ name_to_monplus(
       }
       if (exact_match)
         break;
+    }
+    if (!exact_match) { /* original name of a theme-renamed monster */
+        int tm = theme_mon_orig(str, &len, &matchgend); /* if longer match */
+
+        if (tm != NON_PM)
+            mntmp = tm;
     }
     /* FIXME: some titles have gender; title_to_mon() doesn't propagate it */
     if (mntmp == NON_PM)

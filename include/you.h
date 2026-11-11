@@ -2,6 +2,7 @@
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2016. */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #ifndef YOU_H
 #define YOU_H
@@ -243,7 +244,7 @@ struct Role {
     /* dictionary entries (dat/data.bas) */
 };
 
-extern const struct Role roles[]; /* table of available roles */
+extern struct Role roles[]; /* table of available roles */
 #define Role_if(X) (gu.urole.mnum == (X))
 #define Role_switch (gu.urole.mnum)
 
@@ -293,7 +294,7 @@ struct Race {
     /* dictionary entries (dat/data.bas) */
 };
 
-extern const struct Race races[]; /* Table of available races */
+extern struct Race races[]; /* Table of available races */
 #define Race_if(X) (gu.urace.mnum == (X))
 #define Race_switch (gu.urace.mnum)
 

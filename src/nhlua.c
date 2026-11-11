@@ -1,9 +1,11 @@
 /* $NHDT-Header: NetHack 5.0 nhlua.c 2026/09/30_14:47:34 NetHack-5.0:1.175 $ */
 /*      Copyright (c) 2018 by Pasi Kallinen */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #include "hack.h"
 #include "dlb.h"
+#include "theme.h"
 
 /* Sanity check: sandbox may be version specific.  Minimum and maximum LUA_VERSION_NUM
  * expected by this version of NetHack. */
@@ -163,6 +165,8 @@ void
 l_nhcore_call(int callidx)
 {
     int ltyp;
+
+    theme_event(callidx);
 
     if (callidx < 0 || callidx >= NUM_NHCORE_CALLS || !gl.luacore
         || !nhcore_call_available[callidx])
@@ -2344,6 +2348,7 @@ if (LUA_VERSION_NUM < NHL_MIN_VERSION_NUM_EXPECTED
     l_register_des(L);
 
     l_obj_register(L);
+    theme_lua_hook(L);
 
     /* nhlib.lua assumes the math table exists. */
     if (LUA_TTABLE != lua_getglobal(L, "math")) {
