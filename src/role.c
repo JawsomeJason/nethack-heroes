@@ -2,8 +2,10 @@
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985-1999. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #include "hack.h"
+#include "theme.h"
 
 /*** Table of all roles ***/
 /* According to AD&D, HD for some classes (ex. Wizard) should be smaller
@@ -27,7 +29,7 @@
 
 /* NUM_ROLES is defined in hack.h */
 
-const struct Role roles[NUM_ROLES+1] = {
+struct Role roles[NUM_ROLES+1] = {
     { { "Archeologist", 0 },
       { { "Digger", 0 },
         { "Field Worker", 0 },
@@ -578,7 +580,7 @@ const struct Role roles[NUM_ROLES+1] = {
 /* Table of all races */
 
 /* NUM_RACES is defined in hack.h */
-const struct Race races[NUM_RACES + 1] = {
+struct Race races[NUM_RACES + 1] = {
     {
         "human",
         "human",
@@ -1235,6 +1237,8 @@ void
 rigid_role_checks(void)
 {
     int tmp;
+
+    theme_init(); /* before any menu shows role or race names */
 
     /* Some roles are limited to a single race, alignment, or gender and
      * calling this routine prior to XXX_player_selection() will help
@@ -1981,6 +1985,8 @@ role_init(void)
 {
     int alignmnt;
     struct permonst *pm;
+
+    theme_init(); /* no-op if the role menu already ran it */
 
     /* Strip the role letter out of the player name.
      * This is included for backwards compatibility.

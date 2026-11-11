@@ -2,8 +2,10 @@
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #include "hack.h"
+#include "theme.h"
 
 /* "an uncursed greased partly eaten guardian naga hatchling [corpse]" */
 #define PREFIX 80 /* (56) */
@@ -3554,6 +3556,9 @@ rnd_otyp_by_namedesc(
                 && wishymatch(name, of + 4, FALSE)) /* partial description */
             || ((zn = objects[i].oc_uname) != 0
                 && wishymatch(name, zn, FALSE)) /* user-called name */
+            /* original name or appearance of a theme-renamed object */
+            || ((zn = theme_orig(i, FALSE)) != 0 && wishymatch(name, zn, TRUE))
+            || ((zn = theme_orig(i, TRUE)) != 0 && wishymatch(name, zn, FALSE))
             ) {
             validobjs[n++] = (short) i;
             maxprob += (objects[i].oc_prob + xtra_prob);

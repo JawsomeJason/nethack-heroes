@@ -2,9 +2,11 @@
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
+/* Modified for the heroes fork, 2026-11-11: theme pack seam (see theme.c). */
 
 #include "hack.h"
 #include "mfndpos.h"
+#include "theme.h"
 
 staticfn void pet_sanity_check(struct monst *, const char *);
 staticfn void sanity_check_single_mon(struct monst *, boolean, const char *);
@@ -3389,7 +3391,7 @@ monkilled(
     if (fltxt && (mdef->wormno ? worm_known(mdef)
                                : cansee(mdef->mx, mdef->my)))
         pline_mon(mdef, "%s is %s%s%s!", Monnam(mdef),
-              nonliving(mptr) ? "destroyed" : "killed",
+              nonliving(mptr) ? "destroyed" : theme_killverb(TRUE),
               *fltxt ? " by the " : "", fltxt);
     else
         /* sad feeling is deferred until after potential life-saving */
@@ -3511,7 +3513,7 @@ xkilled(
         boolean namedpet = has_mgivenname(mtmp) && !Hallucination;
 
         You("%s %s!",
-            nonliving(mtmp->data) ? "destroy" : "kill",
+            nonliving(mtmp->data) ? "destroy" : theme_killverb(FALSE),
             !(wasinside || canspotmon(mtmp)) ? "it"
               : !mtmp->mtame ? mon_nam(mtmp)
                 : x_monnam(mtmp, namedpet ? ARTICLE_NONE : ARTICLE_THE,
