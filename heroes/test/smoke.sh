@@ -56,9 +56,10 @@ launch() {
     $T new-session -d -x 100 -y 30 -s g \
         "cd $PG && NETHACKOPTIONS=$OUT/nhrc ./nethack ${MODE:--D} -u smoke 2>>$OUT/err.txt; sleep 30"
 }
-# newgame <role name as the menu shows it>: leaves the first menu in menu.txt
+# newgame <role> [origin], names as the menus show them: leaves the role
+# menu in menu.txt and the origin menu in race.txt
 newgame() {
-    local key
+    local key i
     $T kill-server 2>/dev/null; sleep 1
     find "$PG/save" -type f -delete
     rm -f "$PG"/[0-9]*wizard.[0-9]* "$PG"/[0-9]*smoke.[0-9]* # crash leftovers
@@ -68,9 +69,20 @@ newgame() {
     cp "$SCREEN" "$OUT/menu.txt"
     key=$(grep -oE "[A-Za-z] - an? $1" "$SCREEN" | head -1 | cut -c1)
     [ -n "$key" ] || return 1
-    send "$key"; waitfor "Pick a race"; send h
-    waitfor "alignment"; send n
-    waitfor "Is this ok"; send y
+    send "$key"; waitfor "Pick a race" || return 1
+    cp "$SCREEN" "$OUT/race.txt"
+    key=$(grep -oE "[A-Za-z] - ${2:-Human}" "$SCREEN" | head -1 | cut -c1)
+    [ -n "$key" ] || return 1
+    send "$key"
+    for i in 1 2 3 4; do
+        snap pick
+        if has "Is this ok"; then break
+        elif has "Pick a gender"; then send m
+        elif has "Pick an alignment"; then send n
+        else sleep 0.5; fi
+    done
+    has "Is this ok" || return 1
+    send y
     waitfor "Dlvl:1" || settle start
     settle start
 }
@@ -83,16 +95,17 @@ loaddes() {
     send "#wizloaddes"; send Enter; waitfor "Load which des"; text "$1"
     settle "load $1"; send Escape
 }
-# kill_one <name>: create it and attack until a kill message shows
+# kill_one <name> <map glyph>: create it and attack until a kill message
+# shows; KILLDIR then steps onto the square it died on
 kill_one() {
     local try r c mr mc dir
     for try in 1 2 3 4 5; do
         create "$1"
-        for hit in 1 2 3 4 5 6; do
+        for hit in $(seq 1 "${HITS:-6}"); do
             snap "locate"
-            read -r mr mc cr cc < <(awk '
+            read -r mr mc cr cc < <(awk -v g="$2" '
                 { i = index($0, "@"); if (i && NR > 1 && NR < 22) { ar = NR; ac = i } }
-                { s = $0; for (j = 1; j <= length(s); j++) if (substr(s, j, 1) == ":") { r[NR] = 1; c[NR] = j; n++; rr[n] = NR; cc[n] = j } }
+                { s = $0; for (j = 1; j <= length(s); j++) if (substr(s, j, 1) == g) { r[NR] = 1; c[NR] = j; n++; rr[n] = NR; cc[n] = j } }
                 END { for (k = 1; k <= n; k++) { dr = rr[k] - ar; dc = cc[k] - ac;
                         if (dr >= -1 && dr <= 1 && dc >= -1 && dc <= 1 && (dr || dc)) { print dr, dc, rr[k], cc[k]; exit } }
                       print 9, 9, 0, 0 }' "$SCREEN")
@@ -103,11 +116,54 @@ kill_one() {
             esac
             send F; send "$dir"; settle "attack"
             if has "You defeat" || has "You kill"; then
-                KILLROW=$cr; KILLCOL=$cc; return 0
+                KILLDIR=$dir; return 0
             fi
         done
     done
     return 1
+}
+
+# farlook <n>: farlook the n nearest monsters, one line each, into look.txt
+farlook() {
+    local n k
+    : > "$OUT/look.txt"
+    for n in $(seq 1 "$1"); do
+        $T send-keys -t g -H 3b; sleep 0.4
+        for k in $(seq 1 "$n"); do send m; done
+        send .; snap "farlook $n"; head -1 "$SCREEN" >> "$OUT/look.txt"
+        settle "farlook $n done"; send Escape
+    done
+    cp "$OUT/look.txt" "$SCREEN"
+}
+# to_portal: wizard-teleport from the entrance (10,7) to beside the launch
+# bay portal (72,13), then step onto it
+to_portal() {
+    local k
+    send C-t; waitfor "Where do you want"
+    for k in L L L L L L L l l l l l l j j j j j j; do send $k; done
+    send .; settle teleport
+    send l; sleep 1; settle portal
+}
+overview() { send C-o; snap overview; send Escape; }
+# hero <role> <origin> <sidekick> <kit item>...: start, check, play the mission
+hero() {
+    local role=$1 race=$2 pet=$3 item
+    shift 3
+    if ! newgame "$role" "$race"; then fail "$role: could not start a game"; return; fi
+    cp "$OUT/race.txt" "$SCREEN"
+    check "$role: origin menu offers $race" "$race"
+    send C-x; snap attributes; send Escape
+    check "$role: role name in attributes" "$role"
+    inv
+    for item in "$@"; do check "$role: kit has $item" "$item"; done
+    farlook 1
+    check "$role: sidekick is the $pet" "tame $pet"
+    to_portal
+    overview
+    check "$role: the portal leads into the mission" "[cityfill] <- You are here"
+    send C-v; waitfor "To what level"; text 3; settle "level change"
+    overview
+    check "$role: reaches the boss floor" "[foundry] <- You are here"
 }
 
 # ---- build ---------------------------------------------------------------
@@ -130,6 +186,11 @@ if newgame "Thunder warrior"; then
     cp "$OUT/menu.txt" "$SCREEN"
     check "role menu shows Thunder warrior" "Thunder warrior"
     checkno "role menu hides Valkyrie" "Valkyrie"
+    for r in Archeologist Barbarian Cave Healer Knight Monk Priest Rogue Ranger Tourist; do
+        checkno "role menu hides $r" "$r"
+    done
+    check "role menu shows Arcanist" "Arcanist"
+    check "role menu shows Feral fighter" "Feral fighter"
     inv
     check "kit: war hammer wielded" "war hammer (weapon in"
     check "kit: small shield worn" "small shield (being worn)"
@@ -143,7 +204,7 @@ if newgame "Thunder warrior"; then
     send C-x; snap attributes1
     check "role renamed in attributes" "Thunder warrior"
     send ">"; snap attributes2; send Escape
-    check "regeneration intrinsic granted" "You regenerate"
+    check "preset intrinsic granted" "You are shock resistant"
     # ^T from the entrance (10,7) to beside the launch bay portal (72,13)
     send C-t; waitfor "Where do you want"
     for k in L L L L L L L l l l l l l j j j j j j; do send $k; done
@@ -159,12 +220,19 @@ if newgame "Thunder warrior"; then
     check "wish by themed name" "plasma blade"
     wish "long sword"
     check "wish by original name" "plasma blade"
-    wish "newt corpse"
-    checkno "no-corpse flag blocks the corpse wish" "gutter rat corpse"
-    if kill_one newt; then
-        check "kill prints defeat" "You defeat the gutter rat"
+    wish "kobold corpse"
+    checkno "no-corpse flag blocks the corpse wish" "mugger corpse"
+    create "jackal"
+    check "a renamed enemy shows its new name" "patrol drone appears"
+    # a large monster always leaves a corpse unless flagged; XL 20 survives it
+    send "#levelchange"; send Enter; waitfor "To what experience level"
+    text 20; settle levelchange
+    if HITS=25 kill_one ogre O; then
+        check "defeating a criminal prints defeat" "You defeat the brute"
+        send "$KILLDIR"; settle step; send :; settle look
+        checkno "a defeated criminal leaves no corpse" "corpse"
     else
-        fail "kill prints defeat (could not kill)"
+        fail "defeating a criminal prints defeat (could not defeat)"
     fi
     LOG=$OUT/control.txt loaddes smokebad.lua # kept out of all.txt
     if grep -qiE "$LEVERR" "$OUT/control.txt"; then pass "control: a bad name in a level is reported"
@@ -186,9 +254,45 @@ if newgame "Thunder warrior"; then
     send C-x; snap attributes1
     check "restore shows themed role" "Thunder warrior"
     send ">"; snap attributes2; send Escape
-    check "restore keeps regeneration" "You regenerate"
+    check "restore keeps the preset intrinsic" "You are shock resistant"
 else
     fail "public pack: could not start a game"
+fi
+
+# ---- wave-1 heroes play the mission -------------------------------------
+hero "Thunder warrior" Offworlder "recon drone" "war hammer (weapon in" \
+    "small shield (being worn)" "stun baton"
+hero "Arcanist" Attuned "paper familiar" "quarterstaff (weapon in" \
+    "cloak of magic resistance (being worn)" "wand of striking"
+send +; snap spells; send Escape
+check "Arcanist: kit spellbook teaches its spell" "force bolt"
+check "Arcanist: preset spell learned" "protection"
+hero "Feral fighter" Gifted "tracker bot" "leather jacket (being worn)" \
+    "cram rations"
+send C-x; send ">"; snap attributes2; send Escape
+check "Feral fighter: regeneration intrinsic" "You regenerate"
+
+# ---- origins: human monsters fear only the Gifted ------------------------
+# the human player-monster for the slot shows a rank title, not "samurai"
+peaceful_humans() { grep '^@' "$OUT/look.txt" | grep -v 'beat cop' | grep -c peaceful; }
+if newgame "Feral fighter" Gifted; then
+    for i in 1 2 3 4; do create samurai; done
+    create "hill orc"
+    farlook 6
+    check "Gifted: created human monsters are seen" "a human or elf"
+    if [ "$(peaceful_humans)" = 0 ]; then pass "Gifted: human monsters are hostile"
+    else fail "Gifted: human monsters are hostile"; fi
+    checkno "Gifted: orc monsters are not kin" "peaceful enforcer"
+else
+    fail "Gifted: could not start a game"
+fi
+if newgame "Feral fighter" Human; then
+    for i in 1 2 3 4; do create samurai; done
+    farlook 6
+    if [ "$(peaceful_humans)" -gt 0 ]; then pass "control: human monsters can be peaceful to a Human"
+    else fail "control: human monsters can be peaceful to a Human"; fi
+else
+    fail "Human: could not start a game"
 fi
 
 # ---- downstream pack.lua overrides theme.lua -----------------------------
@@ -227,6 +331,20 @@ if newgame "Thunder warrior"; then
     check "original object name beats a renamed appearance" "ruby check: class *"
 else
     fail "preset edge cases: could not start a game"
+fi
+rm -f "$PG/pack.lua"
+
+# spells with no kit: the stock kit stays and the spell is still learned
+cat > "$PG/pack.lua" <<'LUA'
+nh.hero("Valkyrie", { kit = {}, spells = { "sleep" } })
+LUA
+if newgame "Thunder warrior"; then
+    inv
+    check "preset: an empty kit keeps the stock kit" "+1 spear"
+    send +; snap spells; send Escape
+    check "preset: spells without a kit are learned" "sleep"
+else
+    fail "spells without a kit: could not start a game"
 fi
 rm -f "$PG/pack.lua"
 
@@ -272,13 +390,13 @@ mkdir "$OUT/dat"
 ( cd "$OUT/dat" && "$ROOT/util/dlb" xf "$PG/nhdat" && rm -f theme.lua \
   && "$ROOT/util/dlb" cf "$OUT/nhdat.stock" $(ls) ) >>"$OUT/build.log" 2>&1
 cp "$OUT/nhdat.stock" "$PG/nhdat"
-if newgame Valkyrie; then
+if newgame Valkyrie human; then
     cp "$OUT/menu.txt" "$SCREEN"
     check "stock: role menu shows Valkyrie" "Valkyrie"
     checkno "stock: role menu hides Thunder warrior" "Thunder warrior"
     inv
     check "stock: stock kit (spear, unrenamed dagger)" "+0 dagger"
-    if kill_one newt; then
+    if kill_one newt :; then
         check "stock: kill prints kill" "You kill the newt"
     else
         fail "stock: kill prints kill (could not kill)"

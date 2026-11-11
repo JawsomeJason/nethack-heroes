@@ -124,7 +124,7 @@ Rule of thumb for future heroes:
 * A power that exists only for monsters is a small C change.
 * A power nothing in NetHack does is left out or told through text.
 
-The preset binding is not built yet.
+Wave 1 ships in `dat/theme.lua`.
 
 ## Companion and tone
 
@@ -177,12 +177,12 @@ Tests ran on 2026-11-11 in scratch copies.
 | One stair branch per level | Tested | Engine limit in `place_branch` |
 | Hiding roles and races from options | Tested | Works today |
 | Build | Tested | About 15 seconds with `make -j8 all` |
-| Headquarters as a special level on level 1 | Untested | Not tried |
-| Hero preset binding | Untested | Not built |
-| Origin to race slot mapping | Untested | Proposed only |
+| Headquarters as a special level on level 1 | Tested | New games start there |
+| Hero preset binding | Tested | Three wave-1 presets boot and play the mission in the smoke test |
+| Origin to race slot mapping | Tested | Three gaps fixed through the seam. See ADR 0010 |
 | Blaster casting numbers | Untested | Unverified |
 | Sidekick never starves | Untested | Expected from pet food rules |
-| "Defeat" wording and no human corpse | Untested | Scope is an estimate |
+| "Defeat" wording and no human corpse | Tested | A defeated large criminal leaves no corpse |
 | WebAssembly browser build | Untested | Later work |
 | Git hooks for the naming rule | Untested | Not written yet |
 

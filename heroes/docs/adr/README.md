@@ -25,3 +25,4 @@ Every later session and contributor starts from the Accepted ADRs.
 | [0007](0007-no-third-party-ip.md) | No third-party IP | Accepted, 2026-11-11 |
 | [0008](0008-terminal-first.md) | Terminal first | Accepted, 2026-11-11 |
 | [0009](0009-lone-hero-with-sidekick.md) | Lone hero with a sidekick | Accepted, 2026-11-11 |
+| [0010](0010-origin-mapping-tested.md) | Origin mapping tested | Accepted, 2026-11-11 |

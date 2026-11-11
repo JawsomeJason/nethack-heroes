@@ -85,7 +85,7 @@ All fields are optional. A field that is absent keeps its current value.
 | `name` | Role name. A string, or `{ m = "...", f = "..." }` |
 | `ranks` | List of up to 9 rank titles, lowest first. Each is a string or `{ m, f }`. A nil entry keeps that rank |
 | `lgod`, `ngod`, `cgod` | Lawful, neutral and chaotic patron names |
-| `races` | List of original race nouns the role allows. Replaces the list |
+| `races` | List of original race nouns the role allows. Replaces the list. An empty list hides the role from the menu |
 | `sidekick` | Monster name of the starting pet. A pet that is neither a meat eater nor a plant eater never starves |
 | `spelbase`, `spelheal`, `spelshld`, `spelarmr`, `spelstat`, `spelspec`, `spelsbon` | Casting numbers, as in `struct Role` |
 
@@ -102,9 +102,19 @@ nh.role("Valkyrie", {
 
 Changes a race slot. `original` is the stock race noun, such as `"orc"`.
 Fields are `noun`, `adj` (adjective), `coll` (collective) and `individual` (a string or `{ m, f }`).
+The menu picks a race by the first letter of its noun, so two nouns a role allows need different first letters.
+
+These fields take lists and replace the stock value:
+
+| Field | Value |
+|---|---|
+| `aligns` | Alignments the race allows: `"lawful"`, `"neutral"`, `"chaotic"` |
+| `friends` | Original race nouns whose monsters are always peaceful to this race |
+| `foes` | Original race nouns whose monsters are always hostile to this race |
 
 ```lua
-nh.race("orc", { noun = "Gifted", adj = "Gifted", coll = "the Gifted" })
+nh.race("orc", { noun = "Gifted", adj = "Gifted", coll = "the Gifted",
+                 friends = {}, aligns = { "lawful", "neutral", "chaotic" } })
 ```
 
 ## nh.hero(original_role, fields)
@@ -112,12 +122,12 @@ nh.race("orc", { noun = "Gifted", adj = "Gifted", coll = "the Gifted" })
 Sets a hero preset for a role. It applies when a new game starts with that role.
 All fields are optional.
 
-* `kit` is a list of up to 16 items. It replaces the stock kit.
+* `kit` is a list of up to 16 items. It replaces the stock kit. An empty list keeps the stock kit.
   Each item is an original object name, or `{ "name", spe = 2, n = 3 }`.
   A `"potion of "` style prefix picks the class.
   Items are uncursed and fully identified.
   Weapons and armour default to +0. Armour is worn and the first weapon is wielded, as with stock kits.
-  The stock spells are removed with the stock kit.
+  The stock spells are removed with the stock kit. A spellbook in the kit teaches its spell, as in a stock kit.
   Under `pauper` no kit is given. Under `nudist` the kit has no armour.
   The explore-mode wand of wishing and the wizard-mode kit are kept.
   A kit weapon outside the role's skills unlocks that skill at Basic.
@@ -126,7 +136,7 @@ All fields are optional.
   `"regeneration"`, `"telepathy"` and `"speed"` are also accepted.
   The intrinsics are granted again every turn, so they cannot be lost.
 * `spells` is a list of up to 12 original spell names. They are learned at start and never fade.
-  A spell whose spellbook is in the kit is learned from the book.
+  They are learned with or without a `kit`. A spell already known is not learned again.
 
 ```lua
 nh.hero("Valkyrie", {
@@ -157,6 +167,7 @@ nh.kill_verb("defeat", "defeated")
 
 ## Testing
 
-`heroes/test/smoke.sh` builds, installs and plays the demonstration pack `dat/theme.lua` in tmux.
+`heroes/test/smoke.sh` builds, installs and plays the public pack `dat/theme.lua` in tmux.
 It prints one PASS or FAIL line per check.
-Untested: race renames, gendered names, `nh.rename_appearance`, the "killed" form, and kits that hold charged items.
+Tested: race renames and the race lists, hidden roles, a kit with a charged wand, and spells without a kit.
+Untested: gendered names, `nh.rename_appearance` in play, and the "killed" form.

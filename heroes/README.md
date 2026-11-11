@@ -7,7 +7,7 @@ A downstream theme pack can sit on the same seam and rename or narrow the game.
 ## Status
 
 The design is agreed. The first playable slice is in progress.
-The hero preset binding is not built yet.
+The wave-1 heroes, five origins and the first mission are playable.
 
 ## Read more
 

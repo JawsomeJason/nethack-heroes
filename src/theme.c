@@ -187,12 +187,57 @@ t_theme_obj(lua_State *L)
     return 0;
 }
 
+/* field k of arg 2, a list of original race nouns or alignment adjectives
+   ("lawful"), as a mask; -1 if absent */
+static long
+masklist(lua_State *L, const char *k, boolean isalign)
+{
+    const char *s;
+    long m = 0;
+    int i, j;
+
+    if (lua_getfield(L, 2, k) == LUA_TTABLE)
+        for (i = 1; lua_rawgeti(L, 3, i) != LUA_TNIL; i++, lua_pop(L, 1)) {
+            s = luaL_checkstring(L, -1);
+            if (isalign)
+                for (j = ROLE_ALIGNS - 1; j >= 0 && strcmp(aligns[j].adj, s);)
+                    j--;
+            else
+                j = findkey(racekey, NUM_RACES, s);
+            if (j < 0)
+                return luaL_error(L, "unknown %s '%s'", k, s);
+            m |= isalign ? aligns[j].allow : races[j].selfmask;
+        }
+    else
+        m = -1;
+    lua_settop(L, 2);
+    return m;
+}
+
+/* nh.race(orig_noun, { noun, adj, coll, individual, aligns, friends, foes }) */
+static int
+t_race(lua_State *L)
+{
+    struct Race *ra = &races[slotarg(L, TRUE)];
+    long m;
+
+    setfields(L, (char *) ra, racefields);
+    if ((m = masklist(L, "aligns", TRUE)) >= 0)
+        ra->allow = (short) ((ra->allow & ~ROLE_ALIGNMASK) | m);
+    if ((m = masklist(L, "friends", FALSE)) >= 0)
+        ra->lovemask = (short) m;
+    if ((m = masklist(L, "foes", FALSE)) >= 0)
+        ra->hatemask = (short) m;
+    return 0;
+}
+
 /* nh.role(orig, { name, ranks, lgod, ngod, cgod, races, sidekick, spel* }) */
 static int
 t_role(lua_State *L)
 {
     struct Role *ro = &roles[slotarg(L, FALSE)];
-    int i, j;
+    long m;
+    int i;
 
     setfields(L, (char *) ro, rolefields);
     if (lua_getfield(L, 2, "ranks") == LUA_TTABLE)
@@ -200,27 +245,12 @@ t_role(lua_State *L)
             if (lua_rawgeti(L, 3, i + 1) != LUA_TNIL)
                 rolename(L, &ro->rank[i]);
     lua_settop(L, 2);
-    if (lua_getfield(L, 2, "races") == LUA_TTABLE) {
-        ro->allow &= ~ROLE_RACEMASK;
-        for (i = 1; lua_rawgeti(L, 3, i) != LUA_TNIL; i++, lua_pop(L, 1)) {
-            if ((j = findkey(racekey, NUM_RACES, luaL_checkstring(L, -1))) < 0)
-                return luaL_error(L, "unknown race '%s'", lua_tostring(L, -1));
-            ro->allow |= races[j].selfmask;
-        }
-    }
-    lua_settop(L, 2);
+    if ((m = masklist(L, "races", FALSE)) >= 0) /* {} hides the role */
+        ro->allow = (short) ((ro->allow & ~ROLE_RACEMASK) | m);
     if (lua_getfield(L, 2, "sidekick") != LUA_TNIL
         && (ro->petnum = name_to_mon(luaL_checkstring(L, 3), (int *) 0))
                == NON_PM)
         return luaL_error(L, "unknown monster '%s'", lua_tostring(L, 3));
-    return 0;
-}
-
-/* nh.race(orig_noun, { noun, adj, coll, individual }) */
-static int
-t_race(lua_State *L)
-{
-    setfields(L, (char *) &races[slotarg(L, TRUE)], racefields);
     return 0;
 }
 
@@ -414,7 +444,7 @@ theme_killverb(boolean passive)
 static void
 hero_kit(const struct hero *h)
 {
-    struct obj *o, *nxt, *held[MAXKIT], fake;
+    struct obj *o, *nxt, *held[MAXKIT];
     int k, sk, nheld = 0;
 
     for (o = gi.invent; o; o = nxt) {
@@ -444,12 +474,6 @@ hero_kit(const struct hero *h)
         else
             (void) addinv(o);
     }
-    for (k = 0; k < h->nspells; k++)
-        if (!carrying(h->spells[k])) { /* a kit spellbook teaches it */
-            fake = cg.zeroobj;
-            fake.otyp = h->spells[k];
-            initialspell(&fake);
-        }
     u_init_skills_discoveries();
     for (k = 0; k < nheld; k++) {
         sk = weapon_type(held[k]);
@@ -469,9 +493,21 @@ hero_kit(const struct hero *h)
         read_wizkit();
         obj_delivery(FALSE);
     }
-#ifdef INSURANCE
-    save_currentstate(); /* the checkpoint before welcome() has the stock kit */
-#endif
+}
+
+/* learn the preset spells the stock or preset kit did not teach */
+static void
+hero_spells(const struct hero *h)
+{
+    struct obj fake;
+    int k;
+
+    for (k = 0; k < h->nspells; k++)
+        if (known_spell(h->spells[k]) == spe_Unknown) {
+            fake = cg.zeroobj;
+            fake.otyp = h->spells[k];
+            initialspell(&fake);
+        }
 }
 
 /* re-grant intrinsics and refresh spells; spell.c's KEEN is 20000 */
@@ -497,8 +533,14 @@ theme_event(int call)
     if (flags.initrole < 0 || flags.initrole >= NUM_ROLES)
         return;
     h = &hero[flags.initrole];
-    if (call == NHCORE_START_NEW_GAME && h->nkit)
-        hero_kit(h);
+    if (call == NHCORE_START_NEW_GAME && (h->nkit || h->nspells)) {
+        if (h->nkit)
+            hero_kit(h);
+        hero_spells(h);
+#ifdef INSURANCE
+        save_currentstate(); /* the checkpoint before welcome() is stock */
+#endif
+    }
     if (call == NHCORE_START_NEW_GAME || call == NHCORE_RESTORE_OLD_GAME
         || call == NHCORE_MOVELOOP_TURN)
         hero_tick(h);
