@@ -67,6 +67,7 @@ nh.rename_appearance("ruby", "red gel", "!")
 ## nh.theme_object(original [, class])
 
 Returns the current name for an original object name or appearance, or nil if it is not renamed.
+An original object name is never read as an appearance, so `"ruby"` stays the gem after `nh.rename_appearance("ruby", ...)`.
 A `"potion of "` style prefix narrows the class and is kept in the result.
 The level file wrappers use it. A pack does not normally call it.
 
@@ -117,11 +118,15 @@ All fields are optional.
   Items are uncursed and fully identified.
   Weapons and armour default to +0. Armour is worn and the first weapon is wielded, as with stock kits.
   The stock spells are removed with the stock kit.
+  Under `pauper` no kit is given. Under `nudist` the kit has no armour.
+  The explore-mode wand of wishing and the wizard-mode kit are kept.
+  A kit weapon outside the role's skills unlocks that skill at Basic.
 * `intrinsics` is a list of up to 12 property names.
   The names are the engine's property names, as `#wizintrinsic` lists them.
   `"regeneration"`, `"telepathy"` and `"speed"` are also accepted.
   The intrinsics are granted again every turn, so they cannot be lost.
 * `spells` is a list of up to 12 original spell names. They are learned at start and never fade.
+  A spell whose spellbook is in the kit is learned from the book.
 
 ```lua
 nh.hero("Valkyrie", {

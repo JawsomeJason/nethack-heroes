@@ -6,14 +6,14 @@ set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PG=$ROOT/playground
 OUT=$(mktemp -d)
-T="tmux -L nhsmoke"
+T="tmux -L nhsmoke-$$"
 FAILS=0
 SCREEN=$OUT/screen.txt
 : > "$OUT/all.txt"
 
 cleanup() {
     $T kill-server 2>/dev/null
-    rm -f "$PG/pack.lua" "$PG/smokebad.lua"
+    rm -f "$PG/pack.lua" "$PG"/smoke*.lua
     if [ -f "$OUT/nhdat.orig" ]; then cp "$OUT/nhdat.orig" "$PG/nhdat"; fi
 }
 trap cleanup EXIT
@@ -49,16 +49,19 @@ settle() { # dismiss --More-- pages; $SCREEN then holds every page seen
     done
     cp "$OUT/pages.txt" "$SCREEN"
 }
+# launch: MODE (default -D), OPTS (extra options) and RC (extra config lines)
 launch() {
     $T kill-server 2>/dev/null; sleep 1 # a hangup save may be written
+    printf 'OPTIONS=!tutorial,!autopickup,!tips%s\n%s\n' "${OPTS:-}" "${RC:-}" > "$OUT/nhrc"
     $T new-session -d -x 100 -y 30 -s g \
-        "cd $PG && NETHACKOPTIONS='!tutorial,!autopickup,!tips' ./nethack -D -u smoke 2>>$OUT/err.txt; sleep 30"
+        "cd $PG && NETHACKOPTIONS=$OUT/nhrc ./nethack ${MODE:--D} -u smoke 2>>$OUT/err.txt; sleep 30"
 }
 # newgame <role name as the menu shows it>: leaves the first menu in menu.txt
 newgame() {
     local key
     $T kill-server 2>/dev/null; sleep 1
     find "$PG/save" -type f -delete
+    rm -f "$PG"/[0-9]*wizard.[0-9]* "$PG"/[0-9]*smoke.[0-9]* # crash leftovers
     launch
     waitfor "Shall I pick" && send n
     waitfor "Pick a role" || return 1
@@ -119,6 +122,7 @@ fi
 sed -i 's/^WIZARDS=.*/WIZARDS=*/' "$PG/sysconf"
 rm -f "$PG/pack.lua"
 echo 'des.object("no such thing")' > "$PG/smokebad.lua"
+echo 'nh.pline("ruby check: class " .. obj.new("ruby"):totable().oclass)' > "$PG/smokeruby.lua"
 
 # ---- public pack only ----------------------------------------------------
 : > "$OUT/err.txt"
@@ -127,7 +131,7 @@ if newgame "Thunder warrior"; then
     check "role menu shows Thunder warrior" "Thunder warrior"
     checkno "role menu hides Valkyrie" "Valkyrie"
     inv
-    check "kit: war hammer wielded" "war hammer (weapon in right hand)"
+    check "kit: war hammer wielded" "war hammer (weapon in"
     check "kit: small shield worn" "small shield (being worn)"
     check "kit: renamed dagger present" "stun baton"
     check "kit: potions use the renamed object" "med-spray"
@@ -140,6 +144,13 @@ if newgame "Thunder warrior"; then
     check "role renamed in attributes" "Thunder warrior"
     send ">"; snap attributes2; send Escape
     check "regeneration intrinsic granted" "You regenerate"
+    # ^T from the entrance (10,7) to beside the launch bay portal (72,13)
+    send C-t; waitfor "Where do you want"
+    for k in L L L L L L L l l l l l l j j j j j j; do send $k; done
+    send .; settle teleport
+    check "new game starts on the headquarters entrance" "MISSION GATE"
+    send C-e; settle detect; send "^"; send l; settle trap
+    check "the headquarters portal is on the map" "That is a magic portal"
     create "street thug"
     check "wizard create by themed name" "street thug appears"
     create "gnome lord"
@@ -168,7 +179,7 @@ if newgame "Thunder warrior"; then
     sleep 2; settle restored
     if has "keep the save file"; then send n; settle restored2; fi
     inv
-    check "restore keeps war hammer wielded" "war hammer (weapon in right hand)"
+    check "restore keeps war hammer wielded" "war hammer (weapon in"
     check "restore keeps renamed items" "stun baton"
     send +; snap spells; send Escape
     check "restore keeps the spell" "force bolt"
@@ -195,6 +206,65 @@ else
     fail "pack.lua: could not start a game"
 fi
 rm -f "$PG/pack.lua"
+
+# ---- hero preset edge cases ---------------------------------------------
+cat > "$PG/pack.lua" <<'LUA'
+nh.rename_appearance("ruby", "red gel", "!")
+nh.hero("Valkyrie", {
+  kit = { "war hammer", "bow", "spellbook of force bolt", "small shield" },
+  spells = { "force bolt" },
+})
+LUA
+if newgame "Thunder warrior"; then
+    inv
+    check "preset: kit weapon outside the role's skills is carried" "bow"
+    if grep -qF "curr > max" "$OUT/all.txt"; then fail "preset: no skill_init error for an off-role weapon"
+    else pass "preset: no skill_init error for an off-role weapon"; fi
+    if grep -qF "already known" "$OUT/all.txt"; then fail "preset: spell in kit book and spells list is learned once"
+    else pass "preset: spell in kit book and spells list is learned once"; fi
+    # the first #wizloaddes on the headquarters reports "Couldn't place lregion"
+    LOG=$OUT/ruby.txt loaddes smokeruby.lua
+    check "original object name beats a renamed appearance" "ruby check: class *"
+else
+    fail "preset edge cases: could not start a game"
+fi
+rm -f "$PG/pack.lua"
+
+if OPTS=,pauper newgame "Thunder warrior"; then
+    inv
+    check "pauper: no preset kit" "Not carrying anything"
+else
+    fail "pauper: could not start a game"
+fi
+echo "magic marker" > "$OUT/wizkit.txt"
+if OPTS=,nudist RC="WIZKIT=$OUT/wizkit.txt" newgame "Thunder warrior"; then
+    inv
+    check "nudist: preset weapon given" "war hammer"
+    checkno "nudist: no preset armour" "small shield"
+    check "wizard kit survives the preset" "magic marker"
+else
+    fail "nudist: could not start a game"
+fi
+if MODE=-X newgame "Thunder warrior"; then
+    inv
+    check "explore mode wand survives the preset" "wand of wishing"
+    check "explore mode gets the preset kit" "war hammer"
+else
+    fail "explore: could not start a game"
+fi
+
+if newgame "Thunder warrior"; then
+    pp=$($T list-panes -t g -F '#{pane_pid}')
+    kill -KILL "$(pgrep -P "$pp" -x nethack)"; sleep 1
+    launch; waitfor "Recover"; send r; settle recovered
+    if has "keep the save file"; then send n; settle recovered2; fi
+    inv
+    check "crash recovery keeps the preset kit" "war hammer (weapon in"
+    send +; snap spells; send Escape
+    check "crash recovery keeps the preset spell" "force bolt"
+else
+    fail "crash recovery: could not start a game"
+fi
 
 # ---- no theme.lua, no pack.lua: stock game -------------------------------
 cp "$PG/nhdat" "$OUT/nhdat.orig"

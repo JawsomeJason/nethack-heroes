@@ -172,7 +172,9 @@ t_theme_obj(lua_State *L)
     const char *s = luaL_checkstring(L, 1), *p = s;
     int i = origobj(&p, classarg(L, 2));
 
-    if (i && on0[i] != obj_descr[i].oc_name) {
+    if (i) { /* an original name never falls through to appearances */
+        if (on0[i] == obj_descr[i].oc_name)
+            return 0;
         lua_pushfstring(L, "%s%s", lua_pushlstring(L, s, p - s),
                         obj_descr[i].oc_name);
         return 1;
@@ -406,18 +408,26 @@ theme_killverb(boolean passive)
     return killverb[passive];
 }
 
-/* replace the stock kit; identify, wear and wield through the stock path */
+/* replace the stock kit; identify, wear and wield through the stock path.
+   welcome() runs this after the explore-mode wand, the wizard kit and the
+   INSURANCE checkpoint already exist */
 static void
 hero_kit(const struct hero *h)
 {
-    struct obj *o, fake;
-    int k;
+    struct obj *o, *nxt, *held[MAXKIT], fake;
+    int k, sk, nheld = 0;
 
-    while (gi.invent)
-        useupall(gi.invent);
+    for (o = gi.invent; o; o = nxt) {
+        nxt = o->nobj;
+        if (!(discover && o->otyp == WAN_WISHING))
+            useupall(o);
+    }
     gl.lastinvnr = 51; /* letters restart at 'a' */
     (void) memset(svs.spl_book, 0, sizeof svs.spl_book);
-    for (k = 0; k < h->nkit; k++) {
+    for (k = 0; k < h->nkit && !u.uroleplay.pauper; k++) {
+        if (u.uroleplay.nudist
+            && objects[h->kit[k].otyp].oc_class == ARMOR_CLASS)
+            continue;
         o = mksobj(h->kit[k].otyp, TRUE, FALSE);
         if (h->kit[k].spe != NOSPE)
             o->spe = h->kit[k].spe;
@@ -427,14 +437,41 @@ hero_kit(const struct hero *h)
         o->cursed = o->blessed = 0;
         o->known = o->dknown = o->bknown = o->rknown = 1;
         o->owt = weight(o);
-        (void) addinv(o);
+        /* skill_init() calls a weapon outside the role's skills a bug */
+        sk = weapon_type(o);
+        if (sk != P_NONE && !is_ammo(o) && P_RESTRICTED(sk))
+            held[nheld++] = o;
+        else
+            (void) addinv(o);
     }
-    for (k = 0; k < h->nspells; k++) {
-        fake = cg.zeroobj;
-        fake.otyp = h->spells[k];
-        initialspell(&fake);
-    }
+    for (k = 0; k < h->nspells; k++)
+        if (!carrying(h->spells[k])) { /* a kit spellbook teaches it */
+            fake = cg.zeroobj;
+            fake.otyp = h->spells[k];
+            initialspell(&fake);
+        }
     u_init_skills_discoveries();
+    for (k = 0; k < nheld; k++) {
+        sk = weapon_type(held[k]);
+        unrestrict_weapon_skill(sk);
+        P_SKILL(sk) = P_BASIC;
+        P_ADVANCE(sk) = practice_needed_to_advance(P_BASIC - 1);
+        o = addinv(held[k]);
+        if (is_missile(o)) {
+            if (!uquiver)
+                setuqwep(o);
+        } else if (!uwep && !(uarms && bimanual(o))) {
+            /* shortcut: an on-role weapon later in the kit is wielded first */
+            setuwep(o);
+        }
+    }
+    if (wizard) { /* the wipe above dropped the wizard kit */
+        read_wizkit();
+        obj_delivery(FALSE);
+    }
+#ifdef INSURANCE
+    save_currentstate(); /* the checkpoint before welcome() has the stock kit */
+#endif
 }
 
 /* re-grant intrinsics and refresh spells; spell.c's KEEN is 20000 */
